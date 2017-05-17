@@ -823,32 +823,32 @@ open_log_file(
 	return(DB_SUCCESS);
 }
 
-/*********************************************************************//**
-Creates or opens database data files and closes them.
+
+/** Creates or opens database data files and closes them.
+@param[out]	create_new_db		true = create new database
+@param[out]	min_arch_log_no		min of archived log numbers in
+					data files
+@param[out]	max_arch_log_no		max of archived log numbers in
+					data files
+@param[out]	flushed_lsn		flushed lsn in fist datafile
+@param[out]	sum_of_new_sizes	sum of sizes of the new files
+					added
 @return	DB_SUCCESS or error code */
 MY_ATTRIBUTE((nonnull, warn_unused_result))
 dberr_t
 open_or_create_data_files(
-/*======================*/
-	ibool*		create_new_db,	/*!< out: TRUE if new database should be
-					created */
+	bool*		create_new_db,
 #ifdef UNIV_LOG_ARCHIVE
-	lsn_t*		min_arch_log_no,/*!< out: min of archived log
-					numbers in data files */
-	lsn_t*		max_arch_log_no,/*!< out: max of archived log
-					numbers in data files */
+	lsn_t*		min_arch_log_no,
+	lsn_t*		max_arch_log_no,
 #endif /* UNIV_LOG_ARCHIVE */
-	lsn_t*		min_flushed_lsn,/*!< out: min of flushed lsn
-					values in data files */
-	lsn_t*		max_flushed_lsn,/*!< out: max of flushed lsn
-					values in data files */
-	ulint*		sum_of_new_sizes)/*!< out: sum of sizes of the
-					new files added */
+	lsn_t*		flushed_lsn,
+	ulint*		sum_of_new_sizes)
 {
 	ibool		ret;
 	ulint		i;
-	ibool		one_opened	= FALSE;
-	ibool		one_created	= FALSE;
+	bool		one_opened	= false;
+	bool		one_created	= false;
 	os_offset_t	size;
 	ulint		flags;
 	ulint		space;
@@ -867,7 +867,7 @@ open_or_create_data_files(
 
 	*sum_of_new_sizes = 0;
 
-	*create_new_db = FALSE;
+	*create_new_db = false;
 
 	srv_normalize_path_for_win(srv_data_home);
 
@@ -955,9 +955,10 @@ open_or_create_data_files(
 			}
 
 			const char*	check_msg;
+
 			check_msg = fil_read_first_page(
 				files[i], FALSE, &flags, &space,
-				min_flushed_lsn, max_flushed_lsn, NULL);
+				flushed_lsn, NULL);
 
 			/* If first page is valid, don't overwrite DB.
 			It prevents overwriting DB when mysql_install_db
@@ -988,6 +989,7 @@ open_or_create_data_files(
 					name);
 				return(DB_ERROR);
 			}
+
 			if (srv_data_file_is_raw_partition[i] == SRV_OLD_RAW) {
 				ut_a(!srv_read_only_mode);
 				files[i] = os_file_create(
@@ -1007,7 +1009,6 @@ open_or_create_data_files(
 			}
 
 			if (!ret) {
-
 				os_file_get_last_error(true);
 
 				ib_logf(IB_LOG_LEVEL_ERROR,
@@ -1017,7 +1018,6 @@ open_or_create_data_files(
 			}
 
 			if (srv_data_file_is_raw_partition[i] == SRV_OLD_RAW) {
-
 				goto skip_size_check;
 			}
 
@@ -1044,16 +1044,15 @@ size_check:
 						"auto-extending "
 						"data file %s is "
 						"of a different size "
-						"%lu pages (rounded "
+						ULINTPF " pages (rounded "
 						"down to MB) than specified "
 						"in the .cnf file: "
-						"initial %lu pages, "
-						"max %lu (relevant if "
+						"initial " ULINTPF " pages, "
+						"max " ULINTPF " (relevant if "
 						"non-zero) pages!",
 						name,
-						(ulong) rounded_size_pages,
-						(ulong) srv_data_file_sizes[i],
-						(ulong)
+						rounded_size_pages,
+						srv_data_file_sizes[i],
 						srv_last_file_size_max);
 
 					return(DB_ERROR);
@@ -1066,12 +1065,12 @@ size_check:
 
 				ib_logf(IB_LOG_LEVEL_ERROR,
 					"Data file %s is of a different "
-					"size %lu pages (rounded down to MB) "
+					"size " ULINTPF " pages (rounded down to MB) "
 					"than specified in the .cnf file "
-					"%lu pages!",
+					ULINTPF " pages!",
 					name,
-					(ulong) rounded_size_pages,
-					(ulong) srv_data_file_sizes[i]);
+					rounded_size_pages,
+					srv_data_file_sizes[i]);
 
 				return(DB_ERROR);
 			}
@@ -1090,7 +1089,7 @@ skip_size_check:
 check_first_page:
 			check_msg = fil_read_first_page(
 				files[i], one_opened, &flags, &space,
-				min_flushed_lsn, max_flushed_lsn, &crypt_data);
+				flushed_lsn, &crypt_data);
 
 			if (check_msg) {
 
@@ -1127,9 +1126,9 @@ check_first_page:
 			       != fsp_flags_get_page_size(flags)) {
 
 				ib_logf(IB_LOG_LEVEL_ERROR,
-					"Data file \"%s\" uses page size %lu,"
+					"Data file \"%s\" uses page size " ULINTPF " ,"
 					"but the start-up parameter "
-					"is --innodb-page-size=%lu",
+					"is --innodb-page-size=" ULINTPF " .",
 					name,
 					fsp_flags_get_page_size(flags),
 					UNIV_PAGE_SIZE);
@@ -1160,9 +1159,9 @@ check_first_page:
 			}
 
 			ib_logf(IB_LOG_LEVEL_INFO,
-				"Setting file %s size to %lu MB",
+				"Setting file %s size to " ULINTPF " MB",
 				name,
-				(ulong) (srv_data_file_sizes[i]
+				(srv_data_file_sizes[i]
 					 >> (20 - UNIV_PAGE_SIZE_SHIFT)));
 
 			ret = os_file_set_size(
@@ -1629,9 +1628,8 @@ dberr_t
 innobase_start_or_create_for_mysql(void)
 /*====================================*/
 {
-	ibool		create_new_db;
-	lsn_t		min_flushed_lsn;
-	lsn_t		max_flushed_lsn;
+	bool		create_new_db;
+	lsn_t		flushed_lsn;
 #ifdef UNIV_LOG_ARCHIVE
 	lsn_t		min_arch_log_no	= LSN_MAX;
 	lsn_t		max_arch_log_no	= LSN_MAX;
@@ -2207,7 +2205,7 @@ innobase_start_or_create_for_mysql(void)
 #ifdef UNIV_LOG_ARCHIVE
 					&min_arch_log_no, &max_arch_log_no,
 #endif /* UNIV_LOG_ARCHIVE */
-					&min_flushed_lsn, &max_flushed_lsn,
+					&flushed_lsn,
 					&sum_of_new_sizes);
 	if (err == DB_FAIL) {
 
@@ -2251,12 +2249,12 @@ innobase_start_or_create_for_mysql(void)
 		bool success = buf_flush_list(ULINT_MAX, LSN_MAX, NULL);
 		ut_a(success);
 
-		min_flushed_lsn = max_flushed_lsn = log_get_lsn();
+		flushed_lsn = log_get_lsn();
 
 		buf_flush_wait_batch_end(NULL, BUF_FLUSH_LIST);
 
 		err = create_log_files(create_new_db, logfilename, dirnamelen,
-				       max_flushed_lsn, logfile0);
+				       flushed_lsn, logfile0);
 
 		if (err != DB_SUCCESS) {
 			return(err);
@@ -2276,19 +2274,8 @@ innobase_start_or_create_for_mysql(void)
 
 			if (err == DB_NOT_FOUND) {
 				if (i == 0) {
-					if (max_flushed_lsn
-					    != min_flushed_lsn) {
-						ib_logf(IB_LOG_LEVEL_ERROR,
-							"Cannot create"
-							" log files because"
-							" data files are"
-							" corrupt or"
-							" not in sync"
-							" with each other");
-						return(DB_ERROR);
-					}
 
-					if (max_flushed_lsn < (lsn_t) 1000) {
+					if (flushed_lsn < (lsn_t) 1000) {
 						ib_logf(IB_LOG_LEVEL_ERROR,
 							"Cannot create"
 							" log files because"
@@ -2303,14 +2290,14 @@ innobase_start_or_create_for_mysql(void)
 
 					err = create_log_files(
 						create_new_db, logfilename,
-						dirnamelen, max_flushed_lsn,
+						dirnamelen, flushed_lsn,
 						logfile0);
 
 					if (err == DB_SUCCESS) {
 						err = create_log_files_rename(
 							logfilename,
 							dirnamelen,
-							max_flushed_lsn,
+							flushed_lsn,
 							logfile0);
 					}
 
@@ -2320,8 +2307,7 @@ innobase_start_or_create_for_mysql(void)
 
 					/* Suppress the message about
 					crash recovery. */
-					max_flushed_lsn = min_flushed_lsn
-						= log_get_lsn();
+					flushed_lsn = log_get_lsn();
 					goto files_checked;
 				} else if (i < 2 && !IS_XTRABACKUP()) {
 						/* must have at least 2 log files */
@@ -2479,17 +2465,19 @@ files_checked:
 		bool success = buf_flush_list(ULINT_MAX, LSN_MAX, NULL);
 		ut_a(success);
 
-		min_flushed_lsn = max_flushed_lsn = log_get_lsn();
+		flushed_lsn = log_get_lsn();
 
 		buf_flush_wait_batch_end(NULL, BUF_FLUSH_LIST);
 
 		/* Stamp the LSN to the data files. */
-		fil_write_flushed_lsn_to_data_files(max_flushed_lsn, 0);
+		err = fil_write_flushed_lsn(flushed_lsn);
 
-		fil_flush_file_spaces(FIL_TABLESPACE);
+		if (err != DB_SUCCESS) {
+			return(err);
+		}
 
 		err = create_log_files_rename(logfilename, dirnamelen,
-					      max_flushed_lsn, logfile0);
+					      flushed_lsn, logfile0);
 
 		if (err != DB_SUCCESS) {
 			return(err);
@@ -2544,7 +2532,7 @@ files_checked:
 
 		err = recv_recovery_from_checkpoint_start(
 			LOG_CHECKPOINT, LSN_MAX,
-			min_flushed_lsn, max_flushed_lsn);
+			flushed_lsn);
 
 		if (err != DB_SUCCESS) {
 			return(err);
@@ -2727,16 +2715,16 @@ files_checked:
 			DBUG_EXECUTE_IF("innodb_log_abort_1",
 					return(DB_ERROR););
 
-			min_flushed_lsn = max_flushed_lsn = log_get_lsn();
+			flushed_lsn = log_get_lsn();
 
 			ib_logf(IB_LOG_LEVEL_WARN,
-				"Resizing redo log from %u*%u to %u*%u pages"
+				"Resizing redo log from %u*" ULINTPF " to " ULINTPF "*" ULINTPF " pages"
 				", LSN=" LSN_PF,
-				(unsigned) i,
-				(unsigned) srv_log_file_size,
-				(unsigned) srv_n_log_files,
-				(unsigned) srv_log_file_size_requested,
-				max_flushed_lsn);
+				i,
+				srv_log_file_size,
+				srv_n_log_files,
+				srv_log_file_size_requested,
+				flushed_lsn);
 
 			buf_flush_wait_batch_end(NULL, BUF_FLUSH_LIST);
 
@@ -2746,7 +2734,7 @@ files_checked:
 			we need to explicitly flush the log buffers. */
 			fil_flush(SRV_LOG_SPACE_FIRST_ID);
 
-			ut_ad(max_flushed_lsn == log_get_lsn());
+			ut_ad(flushed_lsn == log_get_lsn());
 
 			/* Prohibit redo log writes from any other
 			threads until creating a log checkpoint at the
@@ -2758,16 +2746,13 @@ files_checked:
 					return(DB_ERROR););
 
 			/* Stamp the LSN to the data files. */
-			fil_write_flushed_lsn_to_data_files(
-				max_flushed_lsn, 0);
+			err = fil_write_flushed_lsn(flushed_lsn);
 
 			DBUG_EXECUTE_IF("innodb_log_abort_4", err = DB_ERROR;);
 
 			if (err != DB_SUCCESS) {
 				return(err);
 			}
-
-			fil_flush_file_spaces(FIL_TABLESPACE);
 
 			/* Close and free the redo log files, so that
 			we can replace them. */
@@ -2785,7 +2770,7 @@ files_checked:
 			srv_log_file_size = srv_log_file_size_requested;
 
 			err = create_log_files(create_new_db, logfilename,
-					       dirnamelen, max_flushed_lsn,
+					       dirnamelen, flushed_lsn,
 					       logfile0);
 
 			if (err != DB_SUCCESS) {
@@ -2794,12 +2779,17 @@ files_checked:
 
 			/* create_log_files() can increase system lsn that is
 			why FIL_PAGE_FILE_FLUSH_LSN have to be updated */
-			min_flushed_lsn = max_flushed_lsn = log_get_lsn();
-			fil_write_flushed_lsn_to_data_files(min_flushed_lsn, 0);
-			fil_flush_file_spaces(FIL_TABLESPACE);
+			flushed_lsn = log_get_lsn();
+
+			err = fil_write_flushed_lsn(flushed_lsn);
+
+			if (err != DB_SUCCESS) {
+				return(err);
+			}
 
 			err = create_log_files_rename(logfilename, dirnamelen,
 						      log_get_lsn(), logfile0);
+
 			if (err != DB_SUCCESS) {
 				return(err);
 			}
